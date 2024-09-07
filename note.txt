@@ -1,0 +1,21 @@
+use Vue3/TypeScript/Pina/vue-router to create a slack-like chat UI, with login/register/char route
+
+src/
+|-- components/
+|   |-- ChatView.vue
+|   |-- LoginView.vue
+|   |-- RegisterView.vue
+|-- stores/
+|   |-- authStore.ts
+|-- views/
+|   |-- Chat.vue
+|   |-- Login.vue
+|   |-- Register.vue
+|-- router/
+|   |-- index.ts
+|-- App.vue
+|-- main.ts
+
+Please help to write Register.vue. User need to provide full name, email, workspace name and password to create an account
+
+can you polish sidebar UI to make it as close as slack
