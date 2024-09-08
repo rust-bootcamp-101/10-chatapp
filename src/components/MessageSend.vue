@@ -1,30 +1,43 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import { useAuthStore } from "../stores/authStore";
 
+const authStore = useAuthStore()
 const message = ref("");
 
-const sendMessage = () => {
-  if (message.value.trim()) {
-    // Dispatch the message to Vuex store or perform the send operation
-    // this.$store.dispatch('sendMessage', this.message);
-    // this.message = '';
+// computed
+const activeChannelId = computed(() => authStore.activeChannel && authStore.activeChannel.id) 
+
+
+// method
+const sendMessage = async () => {
+  const msg = message.value.trim()
+  if (!msg) {
+    return
+  }
+
+  try {
+    authStore.sendMessage({chatId: activeChannelId.value!, content: msg})
+    message.value = ''; // Clear the input after sending
+  } catch (error) {
+    console.error('Failed to send message:', error);
   }
 }
 </script>
 
 <template>
-  <div class="message-send">
+  <div class="flex items-center p-4 bg-white border-t border-gray-200">
     <input
       v-model="message"
       @keyup.enter="sendMessage"
       placeholder="Type a message..."
-      class="message-input"
+      class="flex-1 px-4 py-3 mr-2 text-sm bg-gray-100 border-none rounded-lg focus:outline-none"
       type="text"
     />
-    <button @click="sendMessage" class="send-button">
+    <button @click="sendMessage" class="p-2 text-white bg-blue-600 rounded-full hover:bg-blue-700 focus:outline-none">
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        class="icon"
+        class="w-5 h-5"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -39,47 +52,3 @@ const sendMessage = () => {
     </button>
   </div>
 </template>
-
-<style scoped>
-/* Container styling */
-.message-send {
-  display: flex;
-  align-items: center;
-  padding: 10px 0px;
-  background-color: #fff;
-  border-top: 1px solid #eee;
-}
-/* Input field styling */
-.message-input {
-  flex: 1;
-  padding: 12px 12px;
-  border: none;
-  border-radius: 10px;
-  background-color: #eee;
-  font-size: 14px;
-  margin: 0px 10px;
-}
-.message-input::placeholder {
-  color: #72767d;
-}
-/* Send button styling */
-.send-button {
-  background-color: #5865f2;
-  border: none;
-  border-radius: 50%;
-  padding: 10px;
-  margin-right: 5px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-.send-button .icon {
-  width: 20px;
-  height: 20px;
-}
-.send-button:hover {
-  background-color: #4752c4;
-}
-</style>

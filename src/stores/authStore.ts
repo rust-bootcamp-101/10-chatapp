@@ -31,14 +31,15 @@ export const useAuthStore = defineStore('auth-store', {
   actions: {
     setSSE() {
       const sseBase = getSseBase();
-      const url = `${sseBase}?token=${this.token}`;
+      const url = `${sseBase}?access_token=${this.token}`;
       const sse = new EventSource(url);
 
       sse.addEventListener("NewMessage", (e) => {
         const data = JSON.parse(e.data);
         console.log('message:', e.data);
         delete data.event;
-        this.addMessage(data.chatId, data)
+        const message = data as Message;
+        this.addMessage(data.chatId, message)
       });
 
       sse.onmessage = (event) => {
@@ -78,7 +79,6 @@ export const useAuthStore = defineStore('auth-store', {
         files: message.files,
         createdAt: message.createdAt,
         formattedCreatedAt: formatMessageDate(message.createdAt),
-        sender: this.users.get(message.senderId)
       }));
       this.messages.set(channelId, formattedMessages.reverse())
     },
@@ -264,7 +264,7 @@ export const useAuthStore = defineStore('auth-store', {
       }
     },
 
-    async sendMessage(payload: {chatId: number, messages: Message[]}) {
+    async sendMessage(payload: {chatId: number, content: string}) {
       try {
         const response = await axios.post(`${getUrlBase()}/chats/${payload.chatId}`, payload, {
           headers: {
