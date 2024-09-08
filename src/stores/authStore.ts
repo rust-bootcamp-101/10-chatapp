@@ -4,14 +4,25 @@ import { jwtDecode } from 'jwt-decode';
 import axios from 'axios';
 import { Chat, Message, User, Workspace } from '../types';
 
-export const useAuthStore = defineStore('auth', {
-  state: () => ({
+interface State {
+    user: User | null,         // User information
+    token: string | null,        // Authentication token
+    workspace: Workspace | null,      // Current workspace
+    channels: Chat[],       // List of channels
+    messages: Map<number, Message[]>,       // Messages hashmap, keyed by channel ID
+    users: Map<number, User>,         // Users hashmap under workspace, keyed by user ID
+    activeChannel: Chat | null,
+    sse: EventSource | null,
+}
+
+export const useAuthStore = defineStore('auth-store', {
+  state: (): State => ({
     user: null as User | null,         // User information
     token: null as string | null,        // Authentication token
     workspace: null as Workspace | null,      // Current workspace
     channels: [] as Chat[],       // List of channels
-    messages: {} as Map<number, Message[]>,       // Messages hashmap, keyed by channel ID
-    users: {} as Map<number, User>,         // Users hashmap under workspace, keyed by user ID
+    messages: new Map() as Map<number, Message[]>,       // Messages hashmap, keyed by channel ID
+    users: new Map() as Map<number, User>,         // Users hashmap under workspace, keyed by user ID
     activeChannel: null as Chat | null,
     sse: null as EventSource | null,
   }),
@@ -50,7 +61,7 @@ export const useAuthStore = defineStore('auth', {
     setWorkspace(workspace: Workspace) {
       this.workspace = workspace;
     },
-    setChannels(channels: any) {
+    setChannels(channels: Chat[]) {
       this.channels = channels;
     },
     setUsers(users: Map<number, User>) {
@@ -60,8 +71,14 @@ export const useAuthStore = defineStore('auth', {
     setMessages(channelId: number, messages: Message[]) {
       // Format the date for each message before setting them in the state
       const formattedMessages = messages.map(message => ({
-        ...message,
-        formattedCreatedAt: formatMessageDate(message.createdAt)
+        id: message.id,
+        chatId: message.chatId,
+        senderId: message.senderId,
+        content: message.content,
+        files: message.files,
+        createdAt: message.createdAt,
+        formattedCreatedAt: formatMessageDate(message.createdAt),
+        sender: this.users.get(message.senderId)
       }));
       this.messages.set(channelId, formattedMessages.reverse())
     },
@@ -87,6 +104,7 @@ export const useAuthStore = defineStore('auth', {
     },
     setActiveChannel(channelId: number) {
       const channel = this.channels.find((c) => c.id === channelId)!;
+      console.log(channel)
       this.activeChannel = channel;
     },
     loadUserState() {
@@ -97,24 +115,26 @@ export const useAuthStore = defineStore('auth', {
       // we do not store messages in local storage, so this is always empty
       const storedMessages = localStorage.getItem('messages');
       const storedUsers = localStorage.getItem('users');
+      this.users = new Map([])
+      this.messages = new Map([])
 
       if (storedUser) {
-        this.user = JSON.parse(storedUser);
+        this.user = JSON.parse(storedUser) as User;
       }
       if (storedToken) {
         this.token = storedToken;
       }
       if (storedWorkspace) {
-        this.workspace = JSON.parse(storedWorkspace);
+        this.workspace = JSON.parse(storedWorkspace) as Workspace;
       }
       if (storedChannels) {
-        this.channels = JSON.parse(storedChannels);
+        this.channels = JSON.parse(storedChannels) as Chat[];
       }
       if (storedMessages) {
-        this.messages = JSON.parse(storedMessages);
+        this.messages = JSON.parse(storedMessages) as Map<number, Message[]>;
       }
       if (storedUsers) {
-        this.users = JSON.parse(storedUsers);
+        this.users = JSON.parse(storedUsers) as Map<number, User>;
       }
     },
 
@@ -148,7 +168,7 @@ export const useAuthStore = defineStore('auth', {
             Authorization: `Bearer ${token}`,
           },
         });
-        const channels = chatsResp.data;
+        const channels = chatsResp.data as Chat[];
 
 
         // Store user info, token, and workspace in localStorage
@@ -159,11 +179,16 @@ export const useAuthStore = defineStore('auth', {
         localStorage.setItem('channels', JSON.stringify(channels));
 
         // Commit the mutations to update the state
-        this.setUser(user)
-        this.setToken(token)
-        this.setWorkspace(workspace)
-        this.setChannels(channels)
-        this.setUsers(usersMap)
+        this.user = user
+        this.token = token
+        this.workspace = workspace
+        this.channels = channels
+        this.users = usersMap
+        // this.setUser(user)
+        // this.setToken(token)
+        // this.setWorkspace(workspace)
+        // this.setChannels(channels)
+        // this.setUsers(usersMap)
 
         // call initSSE action
         this.setSSE()
@@ -210,20 +235,21 @@ export const useAuthStore = defineStore('auth', {
       this.token = null
       this.workspace = null
       this.channels = []
-      this.messages = new Map()
+      this.messages = new Map([])
       // close SSE
       this.closeSSE()
+      location.reload()
     },
 
     async fetchMessagesForChannel(channelId: number) {
       if (!this.messages.get(channelId) || this.messages.get(channelId)!.length === 0) {
         try {
-          const response = await axios.get(`${getUrlBase()}/chats/${channelId}/messages`, {
+          const response = await axios.get(`${getUrlBase()}/chats/${channelId}/messages?limit=10`, {
             headers: {
               Authorization: `Bearer ${this.token}`,
             },
           });
-        let messages = response.data;
+          const messages = response.data;
           // messages = messages.map((message) => {
           //   const user = state.users[message.senderId];
           //   return {
@@ -231,7 +257,7 @@ export const useAuthStore = defineStore('auth', {
           //     sender: user,
           //   };
           // } );
-          await this.sendMessage({chatId: channelId, messages })
+          this.setMessages(channelId, messages)
         } catch (error) {
           console.error(`Failed to fetch messages for channel ${channelId}:`, error);
         }
@@ -257,28 +283,32 @@ export const useAuthStore = defineStore('auth', {
 
   // Computed
   getters: {
-    isAuthenticated(state) {
+    isAuthenticatedl(state: State) {
       return !!state.token;
     },
-    getUser(state) {
+    getUser(state: State) {
       return state.user;
     },
     getUserById: (state) => (id: number) => {
-      return state.users.get(id)
+      return state.users.get(id) || null
     },
     getWorkspace(state) {
       return state.workspace;
+    },
+
+    getWorkspaceName(state) {
+      return state.workspace?.name;
     },
     getChannels(state) {
       // filter out channels that type == 'single'
       return state.channels.filter((channel) => channel.type !== 'single');
     },
-    getSingChannels(state) {
+    getSingleChannels(state: State) {
       const channels =  state.channels.filter((channel) => channel.type === 'single');
       // return channel member that is not myself
       return channels.map((channel) => {
         const id = channel.members.find((id) => id !== state.user!.id)!;
-        channel.recipient = state.users.get(id)!;
+        channel.recipient = state.users.get(id) || null;
         return channel;
       });
     },

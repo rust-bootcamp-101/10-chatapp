@@ -1,132 +1,93 @@
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useAuthStore } from '../stores/authStore';
+import { useRouter } from 'vue-router';
 
-const workspaceName = 'My Workspace'
-const channels = ref([
-        { id: 1, name: 'general' },
-        { id: 2, name: 'random' },
-      ])
-const users = ref([
-  { id: 1, name: 'Alice', avatar: 'https://via.placeholder.com/24' },
-  { id: 2, name: 'Bob', avatar: 'https://via.placeholder.com/24' },
-])
+const authStore = useAuthStore()
+const dropdownVisible = ref(false)
+const router = useRouter()
+const root = ref<HTMLElement | null>(null)
+
+// computed
+const workspaceName = computed(() => authStore.getWorkspaceName || 'No Workspace')
+const channels = computed(() => authStore.getChannels)
+const activeChannelId = computed(() => authStore.activeChannel && authStore.activeChannel.id)
+const singleChannels = computed(() => authStore.getSingleChannels)
+
+// methods
+const toggleDropdown = () => dropdownVisible.value = !dropdownVisible.value
+const logout = () => {
+  authStore.logout()
+  router.push("/login")
+}
+const addChannel = () => {
+  // const newChannel: Chat = {
+  //   id: Date.now().toString(),
+  //   name: `Channel ${channels.value.length + 1}`,
+  //   ownerId: 0,
+  //   createdAt: ''
+  // };
+  // authStore.addChannel(newChannel)
+}
+
+const selectChannel = (channelId: number) => {
+  authStore.setActiveChannel(channelId)
+}
+
+const handleOutsideClick = (event: MouseEvent) => {
+  if (!root.value?.contains(event.target as HTMLInputElement)) {
+    dropdownVisible.value = false;
+  }
+}
+
+// hook
+onMounted(() => {
+  document.addEventListener('click', handleOutsideClick);
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleOutsideClick);
+})
+
 </script>
 
 <template>
-  <div class="sidebar">
-    <div class="workspace">
-      <div class="workspace-name">{{ workspaceName }}</div>
-      <button class="add-channel">+</button>
+  <div ref="root" class="w-64 bg-gray-800 text-white flex flex-col h-screen p-4 text-sm">
+    <div class="flex items-center justify-between mb-6">
+      <div class="font-bold text-base truncate cursor-pointer" @click="toggleDropdown">
+        <span>{{ workspaceName }}</span>
+        <button class="text-gray-400 ml-1">&nbsp;▼</button>
+      </div>
+      <div v-if="dropdownVisible" class="absolute top-12 left-0 w-48 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-10">
+        <ul class="py-1">
+          <li @click="logout" class="px-4 py-2 hover:bg-gray-700 cursor-pointer">Logout</li>
+          <!-- Add more dropdown items here as needed -->
+        </ul>
+      </div>
+      <button @click="addChannel" class="text-gray-400 text-xl hover:text-white">+</button>
     </div>
 
-    <div class="channels">
-      <h2>Channels</h2>
+    <div class="mb-6">
+      <h2 class="text-xs uppercase text-gray-400 mb-2">Channels</h2>
       <ul>
-        <li v-for="channel in channels" :key="channel.id">
+        <li v-for="channel in channels" :key="channel.id" @click="selectChannel(channel.id)"
+            :class="['px-2 py-1 rounded cursor-pointer', { 'bg-blue-600': channel.id === activeChannelId }]">
           # {{ channel.name }}
         </li>
       </ul>
     </div>
 
-    <div class="direct-messages">
-      <h2>Direct Messages</h2>
+    <div>
+      <h2 class="text-xs uppercase text-gray-400 mb-2">Direct Messages</h2>
       <ul>
-        <li v-for="user in users" :key="user.id">
-          <img :src="user.avatar" class="avatar" alt="Avatar" /> {{ user.name }}
+        <li v-for="channel in singleChannels" :key="channel.id" @click="selectChannel(channel.id)"
+            :class="['flex items-center px-2 py-1 rounded cursor-pointer', { 'bg-blue-600': channel.id === activeChannelId }]">
+          <img :src="`https://ui-avatars.com/api/?name=${channel.recipient!.fullname.replace(' ', '+')}`"
+               class="w-6 h-6 rounded-full mr-2" alt="Avatar" />
+          {{ channel.recipient!.fullname }}
         </li>
       </ul>
     </div>
   </div>
 </template>
-
-<style scoped>
-/* Base sidebar styling */
-.sidebar {
-  width: 250px;
-  background-color: #2f3136;
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  padding: 10px;
-  font-size: 14px;
-}
-/* Workspace section */
-.workspace {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-.workspace-name {
-  font-weight: bold;
-  font-size: 16px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.add-channel {
-  background: none;
-  border: none;
-  color: #b9bbbe;
-  font-size: 20px;
-  cursor: pointer;
-  padding: 0;
-  margin: 0;
-}
-.add-channel:hover {
-  color: #fff;
-}
-/* Channels section */
-.channels {
-  margin-bottom: 20px;
-}
-.channels h2 {
-  font-size: 12px;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-  color: #b9bbbe;
-}
-.channels ul {
-  list-style-type: none;
-  padding: 0;
-  margin: 0;
-}
-.channels li {
-  padding: 5px 10px;
-  cursor: pointer;
-  border-radius: 4px;
-}
-.channels li:hover {
-  background-color: #3a3e44;
-}
-/* Direct Messages section */
-.direct-messages h2 {
-  font-size: 12px;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-  color: #b9bbbe;
-}
-.direct-messages ul {
-  list-style-type: none;
-  padding: 0;
-  margin: 0;
-}
-.direct-messages li {
-  display: flex;
-  align-items: center;
-  padding: 5px 10px;
-  cursor: pointer;
-  border-radius: 4px;
-}
-.direct-messages li:hover {
-  background-color: #3a3e44;
-}
-.avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  margin-right: 10px;
-}
-</style>

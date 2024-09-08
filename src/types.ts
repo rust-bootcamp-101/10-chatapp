@@ -39,5 +39,6 @@ export type Message = {
   content: string,
   files: string[],
   createdAt: string,
-  formattedCreatedAt: string
+  formattedCreatedAt: string,
+  sender: User | null
 }
