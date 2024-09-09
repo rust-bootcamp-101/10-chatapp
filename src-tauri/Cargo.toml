@@ -1,8 +1,8 @@
 [package]
 name = "chatapp"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Chat app"
+authors = ["startdusk"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -15,8 +15,16 @@ crate-type = ["lib", "cdylib", "staticlib"]
 tauri-build = { version = "2.0.0-rc", features = [] }
 
 [dependencies]
-tauri = { version = "2.0.0-rc", features = [] }
+tauri = { version = "2.0.0-rc", features = ["tray-icon"] }
 tauri-plugin-shell = "2.0.0-rc"
+tauri-plugin-clipboard-manager = "2.0.0-rc"
+tauri-plugin-log = { version = "2.0.0-rc", features = ["colored"] }
+tauri-plugin-window-state = "2.0.0-rc"
+
+tracing = { version = "0.1.40", features = ["log"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
+anyhow = "1.0.86"
+config = { version = "0.14.0", default-features = false, features = ["yaml"] }
+arc-swap = "1.7.1"
+dirs = "5.0.1"

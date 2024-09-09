@@ -15,14 +15,14 @@ interface State {
     sse: EventSource | null,
 }
 
-export const useAuthStore = defineStore('auth-store', {
+export const useAuthStore = defineStore('authStore', {
   state: (): State => ({
-    user: null as User | null,         // User information
-    token: null as string | null,        // Authentication token
-    workspace: null as Workspace | null,      // Current workspace
-    channels: [] as Chat[],       // List of channels
-    messages: new Map() as Map<number, Message[]>,       // Messages hashmap, keyed by channel ID
-    users: new Map() as Map<number, User>,         // Users hashmap under workspace, keyed by user ID
+    user: getStoredUser(),         // User information
+    token: getStoredToken(),        // Authentication token
+    workspace: getStoredWorkspace(),      // Current workspace
+    channels: getStoredChannels(),       // List of channels
+    messages: getStoredMessages(),       // Messages hashmap, keyed by channel ID
+    users: getStoredUsers(),         // Users hashmap under workspace, keyed by user ID
     activeChannel: null as Chat | null,
     sse: null as EventSource | null,
   }),
@@ -36,7 +36,7 @@ export const useAuthStore = defineStore('auth-store', {
 
       sse.addEventListener("NewMessage", (e) => {
         const data = JSON.parse(e.data);
-        console.log('message:', e.data);
+        console.log('new message:', e.data);
         delete data.event;
         const message = data as Message;
         this.addMessage(data.chatId, message)
@@ -88,7 +88,7 @@ export const useAuthStore = defineStore('auth-store', {
 
       // Update the channels and messages in local storage
       localStorage.setItem('channels', JSON.stringify(this.channels));
-      localStorage.setItem('messages', JSON.stringify(this.messages));
+      localStorage.setItem('messages', JSON.stringify(Object.fromEntries(this.messages)));
     },
     addMessage(channelId: number, message: Message) {
       if (this.messages.has(channelId)) {
@@ -104,38 +104,7 @@ export const useAuthStore = defineStore('auth-store', {
     },
     setActiveChannel(channelId: number) {
       const channel = this.channels.find((c) => c.id === channelId)!;
-      console.log(channel)
       this.activeChannel = channel;
-    },
-    loadUserState() {
-      const storedUser = localStorage.getItem('user');
-      const storedToken = localStorage.getItem('token');
-      const storedWorkspace = localStorage.getItem('workspace');
-      const storedChannels = localStorage.getItem('channels');
-      // we do not store messages in local storage, so this is always empty
-      const storedMessages = localStorage.getItem('messages');
-      const storedUsers = localStorage.getItem('users');
-      this.users = new Map([])
-      this.messages = new Map([])
-
-      if (storedUser) {
-        this.user = JSON.parse(storedUser) as User;
-      }
-      if (storedToken) {
-        this.token = storedToken;
-      }
-      if (storedWorkspace) {
-        this.workspace = JSON.parse(storedWorkspace) as Workspace;
-      }
-      if (storedChannels) {
-        this.channels = JSON.parse(storedChannels) as Chat[];
-      }
-      if (storedMessages) {
-        this.messages = JSON.parse(storedMessages) as Map<number, Message[]>;
-      }
-      if (storedUsers) {
-        this.users = JSON.parse(storedUsers) as Map<number, User>;
-      }
     },
 
     closeSSE() {
@@ -156,11 +125,23 @@ export const useAuthStore = defineStore('auth-store', {
             Authorization: `Bearer ${token}`,
           },
         });
-        const users: User[] = usersResp.data;
+
+        console.log(usersResp)
+        const users: User[] = usersResp.data.map((user: any) => {
+          return {
+            id: user.id,
+            wsId: 0,
+            wsName: 0,
+            fullname: user.fullname,
+            email: user.email,
+            createdAt: ''
+          }
+        });
         const usersMap = new Map<number, User>();
         users.forEach((u) => {
           usersMap.set(u.id, u)
         });
+        console.log(usersMap, JSON.stringify(Object.fromEntries(usersMap)))
 
         // fetch all my channels
         const chatsResp = await axios.get(`${getUrlBase()}/chats`, {
@@ -175,20 +156,15 @@ export const useAuthStore = defineStore('auth-store', {
         localStorage.setItem('user', JSON.stringify(user));
         localStorage.setItem('token', token);
         localStorage.setItem('workspace', JSON.stringify(workspace));
-        localStorage.setItem('users', JSON.stringify(usersMap));
+        localStorage.setItem('users', JSON.stringify(Object.fromEntries(usersMap)));
         localStorage.setItem('channels', JSON.stringify(channels));
 
         // Commit the mutations to update the state
-        this.user = user
-        this.token = token
-        this.workspace = workspace
-        this.channels = channels
-        this.users = usersMap
-        // this.setUser(user)
-        // this.setToken(token)
-        // this.setWorkspace(workspace)
-        // this.setChannels(channels)
-        // this.setUsers(usersMap)
+        this.setUser(user)
+        this.setToken(token)
+        this.setWorkspace(workspace)
+        this.setChannels(channels)
+        this.setUsers(usersMap)
 
         // call initSSE action
         this.setSSE()
@@ -271,7 +247,7 @@ export const useAuthStore = defineStore('auth-store', {
             Authorization: `Bearer ${this.token}`,
           },
         });
-        console.log('Message sent:', response.data);
+        console.log('sendMessage:', response.data);
         // commit('addMessage', { channelId: payload.chatId, message: response.data });
       } catch (error) {
         console.error('Failed to send message:', error);
@@ -308,7 +284,8 @@ export const useAuthStore = defineStore('auth-store', {
       // return channel member that is not myself
       return channels.map((channel) => {
         const id = channel.members.find((id) => id !== state.user!.id)!;
-        channel.recipient = state.users.get(id) || null;
+
+        channel.recipient = (state.users as Map<number, User>).get(id) || null;
         return channel;
       });
     },
@@ -323,4 +300,55 @@ export const useAuthStore = defineStore('auth-store', {
     },
   },
 });
+
+const getStoredUser = () => {
+  const storedUser = localStorage.getItem('user');
+  if (storedUser) {
+    return JSON.parse(storedUser) as User;
+  }
+  return null
+}
+
+const getStoredToken = () => {
+  const storedToken = localStorage.getItem('token');
+  return storedToken
+}
+
+const getStoredWorkspace = () => {
+  const storedWorkspace = localStorage.getItem('workspace');
+      if (storedWorkspace) {
+        return JSON.parse(storedWorkspace) as Workspace;
+      }
+      return null
+}
+
+const getStoredChannels = (): Chat[] => {
+  const storedChannels = localStorage.getItem('channels');
+      if (storedChannels) {
+        return JSON.parse(storedChannels) as Chat[];
+      }
+      return []
+}
+
+const getStoredMessages = (): Map<number, Message[]> => {
+  const storedMessages = localStorage.getItem('messages');
+      if (storedMessages) {
+        // Parse the JSON string to an object
+        const parsedObject: Record<number, Message[]> = JSON.parse(storedMessages);
+        // Convert the object to a Map
+        return new Map<number, Message[]>(Object.entries(parsedObject).map(([key, value]) => [Number(key), value]));
+      }
+      return new Map()
+}
+
+const getStoredUsers = (): Map<number, User> => {
+  const storedUsers = localStorage.getItem('users');
+  if (storedUsers) {
+    // Parse the JSON string to an object
+    const parsedObject: Record<number, User> = JSON.parse(storedUsers);
+    // Convert the object to a Map
+    return new Map<number, User>(Object.entries(parsedObject).map(([key, value]) => [Number(key), value]));
+  }
+  return new Map()
+}
 

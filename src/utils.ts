@@ -3,10 +3,17 @@ import { invoke } from '@tauri-apps/api/core';
 const URL_BASE = 'http://localhost:6688/api';
 const SSE_URL = 'http://localhost:6687/events';
 
-let config: any = null;
+type Config = {
+  server: {
+    chat: string,
+    notification: string
+  }
+}
+
+let config: Config | null = null;
 try {
   if (invoke) {
-    config = await invoke('get_config');
+    config = await invoke('get_config') as Config;
   }
 } catch (error) {
   console.warn('failed to get config: fallback');
